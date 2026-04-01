@@ -1,0 +1,25 @@
+{
+  "name": "moto-parts-api",
+  "version": "1.0.0",
+  "description": "Serverless API for a motorcycle parts marketplace",
+  "main": "index.js",
+  "scripts": {
+    "start": "serverless offline start",
+    "deploy": "serverless deploy",
+    "dynamodb:install": "serverless dynamodb install",
+    "seed": "serverless dynamodb seed",
+    "logs": "serverless logs -f createPart --tail"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.400.0",
+    "@aws-sdk/lib-dynamodb": "^3.400.0",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "serverless": "^3.38.0",
+    "serverless-dynamodb-local": "^0.2.40",
+    "serverless-offline": "^13.3.0"
+  },
+  "author": "",
+  "license": "ISC"
+}
