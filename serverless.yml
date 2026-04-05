@@ -23,15 +23,15 @@ provider:
       Resource: "arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.DYNAMODB_TABLE}"
 
 plugins:
-  - serverless-offline
   - serverless-dynamodb
+  - serverless-offline
 
 custom:
   serverless-offline:
     httpPort: 3000
     lambdaPort: 3002
     noPrependStageInUrl: true
-  dynamodb:
+  serverless-dynamodb:
     stages:
       - dev
     start:
