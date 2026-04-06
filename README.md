@@ -1,44 +1,66 @@
-# 🏍️ Moto Parts API — Serverless Marketplace
+# 🏍️ Motorcycle Parts API
 
-A serverless REST API for listing and searching motorcycle parts, built with **Serverless Framework**, **AWS Lambda (local)**, and **DynamoDB Local**.
+A fully local serverless REST API for registering and querying motorcycle parts, built with the **Serverless Framework**, **AWS Lambda (simulated)**, and **DynamoDB (local)**.
 
 ---
 
-## 📁 Project Structure
+## Architecture
 
 ```
-moto-parts-api/
-├── serverless.yml                  # Serverless Framework configuration
+HTTP Request
+    │
+    ▼
+API Gateway (serverless-offline)
+    │
+    ▼
+Lambda Handler       ← parse request, validate input, return response
+    │
+    ▼
+Service Layer        ← business logic, validation rules
+    │
+    ▼
+Repository Layer     ← DynamoDB operations only
+    │
+    ▼
+DynamoDB Local       ← Parts table + type-index GSI
+```
+
+---
+
+## Project Structure
+
+```
+motorcycle-parts-api/
+├── serverless.yml               # Serverless Framework config
+├── tsconfig.json
 ├── package.json
 ├── scripts/
-│   └── seed.json                   # Sample data for local DynamoDB
+│   └── setup-db.js              # Manual DynamoDB table setup (optional)
 └── src/
     ├── models/
-    │   └── Part.js                 # Data model + validation
+    │   └── Part.ts              # Types & interfaces
     ├── repositories/
-    │   ├── dynamoClient.js         # DynamoDB client (local/cloud)
-    │   └── partsRepository.js      # DynamoDB operations
-    ├── business/
-    │   └── partsService.js         # Business logic layer
-    └── functions/
-        ├── response.js             # HTTP response helpers
-        ├── createPart.js           # POST /parts handler
-        └── listParts.js            # GET /parts handler
+    │   ├── dynamoClient.ts      # DynamoDB client config
+    │   └── partsRepository.ts   # DynamoDB read/write operations
+    ├── services/
+    │   └── partsService.ts      # Business logic & validation
+    └── handlers/
+        ├── response.ts          # HTTP response helpers
+        ├── createPart.ts        # POST /parts handler
+        └── getPartsByType.ts    # GET /parts handler
 ```
 
 ---
 
-## ⚙️ Prerequisites
+## Prerequisites
 
-Make sure you have installed:
-
-- **Node.js** v18+ → https://nodejs.org/
-- **Java JRE 8+** (required by DynamoDB Local) → https://www.java.com/
-- **npm** v8+
+- **Node.js 18.x**
+- **Java Runtime (JRE 8+)** — required by DynamoDB Local
+- **npm** or **yarn**
 
 ---
 
-## 🚀 Setup & Installation
+## Setup & Installation
 
 ### 1. Install dependencies
 
@@ -46,213 +68,199 @@ Make sure you have installed:
 npm install
 ```
 
-### 2. Install DynamoDB Local
+### 2. Install DynamoDB Local binary
 
 ```bash
-npm run dynamodb:install
+npx serverless dynamodb install
 ```
 
-This downloads the DynamoDB Local JAR file (requires Java).
-
-### 3. Start the local server
+### 3. Start the server
 
 ```bash
 npm start
+# or
+npx serverless offline start
 ```
 
 This will:
-- Start **DynamoDB Local** on port `8000`
-- Create the `PartsTable` with the `TypeIndex` GSI
-- Seed the table with sample motorcycle parts
-- Start **serverless-offline** on port `3000`
-
-You should see output like:
-```
-Server ready: http://localhost:3000
-```
+- Launch **DynamoDB Local** on port `8000`
+- Auto-create the `Parts` table with the `type-index` GSI (via `migrate: true`)
+- Launch **API Gateway simulation** on port `3000`
 
 ---
 
-## 📡 API Endpoints
+## API Reference
 
 Base URL: `http://localhost:3000`
 
-### POST /parts — Register a new part
+---
 
-```
-POST http://localhost:3000/parts
-Content-Type: application/json
-```
+### POST /parts — Register a Part
 
-**Request body:**
-```json
-{
-  "name": "Front Brake Pad Set",
-  "type": "brakes",
-  "price": 45.99
-}
-```
-
-**Success response (201):**
-```json
-{
-  "message": "Part registered successfully.",
-  "part": {
-    "id": "uuid-auto-generated",
-    "name": "Front Brake Pad Set",
+**Request:**
+```bash
+curl -X POST http://localhost:3000/parts \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Brake Disc",
     "type": "brakes",
-    "price": 45.99,
-    "createdAt": "2024-01-20T10:30:00.000Z"
+    "price": 49.99
+  }'
+```
+
+**Response 201:**
+```json
+{
+  "id": "a3f1c2d4-...",
+  "name": "Brake Disc",
+  "type": "brakes",
+  "price": 49.99,
+  "createdAt": "2024-01-15T10:30:00.000Z"
+}
+```
+
+**Response 400 (validation error):**
+```json
+{
+  "error": "Bad Request",
+  "details": [
+    { "field": "price", "message": "\"price\" must be a number greater than 0" }
+  ]
+}
+```
+
+#### Validation Rules
+| Field   | Rule                              |
+|---------|-----------------------------------|
+| `name`  | Required, non-empty string        |
+| `type`  | Required, non-empty string        |
+| `price` | Required, number strictly > 0     |
+
+---
+
+### GET /parts?type={type} — Query Parts by Type
+
+**Request:**
+```bash
+curl "http://localhost:3000/parts?type=brakes"
+```
+
+**Response 200:**
+```json
+[
+  {
+    "id": "a3f1c2d4-...",
+    "name": "Brake Disc",
+    "type": "brakes",
+    "price": 49.99,
+    "createdAt": "2024-01-15T10:30:00.000Z"
   }
-}
+]
 ```
 
-**Validation error (400):**
+**Response 400 (missing type):**
 ```json
 {
-  "error": true,
-  "message": "Field \"price\" must be greater than 0."
-}
-```
-
----
-
-### GET /parts — List all parts
-
-```
-GET http://localhost:3000/parts
-```
-
-**Response (200):**
-```json
-{
-  "count": 7,
-  "parts": [ ... ]
-}
-```
-
----
-
-### GET /parts?type=brakes — Filter by type
-
-```
-GET http://localhost:3000/parts?type=brakes
-```
-
-**Response (200):**
-```json
-{
-  "count": 2,
-  "filter": { "type": "brakes" },
-  "parts": [
-    {
-      "id": "...",
-      "name": "Front Brake Pad Set",
-      "type": "brakes",
-      "price": 45.99,
-      "createdAt": "..."
-    }
+  "error": "Bad Request",
+  "details": [
+    { "field": "type", "message": "Query parameter \"type\" is required" }
   ]
 }
 ```
 
 ---
 
-## 🧪 Testing with curl
+## Example curl Test Sequence
 
 ```bash
-# List all parts
-curl http://localhost:3000/parts
-
-# Filter by type
-curl "http://localhost:3000/parts?type=brakes"
-curl "http://localhost:3000/parts?type=engine"
-curl "http://localhost:3000/parts?type=exhaust"
-
-# Create a new part
-curl -X POST http://localhost:3000/parts \
+# 1. Register a brake disc
+curl -s -X POST http://localhost:3000/parts \
   -H "Content-Type: application/json" \
-  -d '{"name": "Oil Filter", "type": "engine", "price": 9.99}'
+  -d '{"name":"Brake Disc","type":"brakes","price":49.99}' | jq
 
-# Validation error examples
-curl -X POST http://localhost:3000/parts \
+# 2. Register brake pads
+curl -s -X POST http://localhost:3000/parts \
   -H "Content-Type: application/json" \
-  -d '{"name": "Bad Part", "type": "engine", "price": -5}'
+  -d '{"name":"Brake Pads","type":"brakes","price":29.99}' | jq
+
+# 3. Register an engine filter
+curl -s -X POST http://localhost:3000/parts \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Air Filter","type":"engine","price":19.50}' | jq
+
+# 4. Query all brake parts
+curl -s "http://localhost:3000/parts?type=brakes" | jq
+
+# 5. Query engine parts
+curl -s "http://localhost:3000/parts?type=engine" | jq
+
+# 6. Test validation — missing name
+curl -s -X POST http://localhost:3000/parts \
+  -H "Content-Type: application/json" \
+  -d '{"type":"brakes","price":10}' | jq
+
+# 7. Test validation — price = 0
+curl -s -X POST http://localhost:3000/parts \
+  -H "Content-Type: application/json" \
+  -d '{"name":"X","type":"brakes","price":0}' | jq
 ```
 
 ---
 
-## 🔧 Available Scripts
+## Data Model
 
-| Command | Description |
+### Part Entity
+
+| Field       | Type     | Description                        |
+|-------------|----------|------------------------------------|
+| `id`        | `string` | UUID (auto-generated)              |
+| `name`      | `string` | Part name (required)               |
+| `type`      | `string` | Part category (required, indexed)  |
+| `price`     | `number` | Price in USD, must be > 0          |
+| `createdAt` | `string` | ISO 8601 timestamp                 |
+
+### DynamoDB Table: `Parts`
+
+| Key Type | Attribute | Type   |
+|----------|-----------|--------|
+| PK       | `id`      | String |
+
+**GSI: `type-index`**
+
+| Key Type | Attribute | Type   |
+|----------|-----------|--------|
+| PK       | `type`    | String |
+
+---
+
+## Deploying to Real AWS
+
+When ready to deploy to AWS, remove the local overrides from `serverless.yml`:
+
+```yaml
+# Remove these from provider.environment:
+DYNAMODB_ENDPOINT: http://localhost:8000
+AWS_ACCESS_KEY_ID: local
+AWS_SECRET_ACCESS_KEY: local
+
+# Remove from custom:
+dynamodb:
+  start:
+    ...
+```
+
+Then run:
+```bash
+npx serverless deploy --stage prod
+```
+
+---
+
+## Troubleshooting
+
+| Problem | Solution |
 |---|---|
-| `npm start` | Start local server (DynamoDB + serverless-offline) |
-| `npm run dynamodb:install` | Download DynamoDB Local JAR |
-| `npm run deploy` | Deploy to AWS (requires AWS credentials) |
-
----
-
-## 📦 Data Model
-
-| Field | Type | Required | Notes |
-|---|---|---|---|
-| `id` | string (UUID) | auto | Auto-generated UUID v4 |
-| `name` | string | ✅ | Non-empty |
-| `type` | string | ✅ | Indexed via GSI (TypeIndex), stored lowercase |
-| `price` | number | ✅ | Must be > 0 |
-| `createdAt` | string (ISO 8601) | auto | Auto-generated timestamp |
-
----
-
-## 🏗️ Architecture
-
-```
-HTTP Request
-    │
-    ▼
-serverless-offline (port 3000)
-    │
-    ▼
-Lambda Function (createPart / listParts)
-    │
-    ▼
-Business Logic Layer (partsService.js)
-    │
-    ▼
-Repository Layer (partsRepository.js)
-    │
-    ▼
-DynamoDB Local (port 8000)
-```
-
-### Layers
-
-- **Functions** — Lambda handlers. Parse HTTP input and return HTTP responses.
-- **Business Logic** — `partsService.js`. Validates data, orchestrates operations.
-- **Repository** — `partsRepository.js`. All DynamoDB read/write operations.
-- **Model** — `Part.js`. Data structure and field validation rules.
-
----
-
-## 🌱 Seed Data
-
-Pre-loaded sample parts:
-
-| Name | Type | Price |
-|---|---|---|
-| Front Brake Pad Set | brakes | $45.99 |
-| Rear Brake Disc | brakes | $89.50 |
-| Air Filter K&N | engine | $32.00 |
-| Spark Plug NGK Iridium | engine | $12.75 |
-| Akrapovic Slip-On Exhaust | exhaust | $349.99 |
-| Handlebar Grips | accessories | $18.00 |
-| Chain & Sprocket Kit | transmission | $95.00 |
-
----
-
-## 📝 Notes
-
-- **No authentication** is required (as per spec).
-- DynamoDB runs **in-memory** locally — data resets on restart (except seeded data).
-- The `type` field is automatically converted to **lowercase** for consistent querying.
-- Results are sorted by `createdAt` descending (newest first).
+| `DynamoDB Local not starting` | Ensure Java (JRE 8+) is installed: `java -version` |
+| `Table not found` | Run `node scripts/setup-db.js` or restart with `npm start` |
+| `Port 3000 in use` | Change `httpPort` in `serverless.yml` |
+| `Port 8000 in use` | Change `port` under `dynamodb.start` in `serverless.yml` |

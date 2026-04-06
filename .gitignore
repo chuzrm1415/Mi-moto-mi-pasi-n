@@ -1,8 +1,8 @@
 node_modules/
+dist/
 .serverless/
 .dynamodb/
-*.log
+*.js.map
+*.d.ts
 .env
 .env.local
-dist/
-coverage/

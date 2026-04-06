@@ -1,4 +1,4 @@
-service: moto-parts-api
+service: motorcycle-parts-api
 
 frameworkVersion: '3'
 
@@ -6,11 +6,12 @@ provider:
   name: aws
   runtime: nodejs18.x
   region: us-east-1
-  stage: ${opt:stage, 'dev'}
   environment:
-    DYNAMODB_TABLE: ${self:service}-parts-${self:provider.stage}
+    DYNAMODB_TABLE: Parts
+    DYNAMODB_ENDPOINT: http://localhost:8000
+    AWS_ACCESS_KEY_ID: local
+    AWS_SECRET_ACCESS_KEY: local
     AWS_REGION: us-east-1
-    IS_OFFLINE: true
   iamRoleStatements:
     - Effect: Allow
       Action:
@@ -20,42 +21,21 @@ provider:
         - dynamodb:PutItem
         - dynamodb:UpdateItem
         - dynamodb:DeleteItem
-      Resource: "arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.DYNAMODB_TABLE}"
-
-plugins:
-  - serverless-dynamodb
-  - serverless-offline
-
-custom:
-  serverless-offline:
-    httpPort: 3000
-    lambdaPort: 3002
-    noPrependStageInUrl: true
-  serverless-dynamodb:
-    stages:
-      - dev
-    start:
-      port: 8000
-      inMemory: true
-      migrate: true
-      seed: true
-    seed:
-      domain:
-        sources:
-          - table: ${self:provider.environment.DYNAMODB_TABLE}
-            sources: [./scripts/seed.json]
+      Resource:
+        - arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.DYNAMODB_TABLE}
+        - arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.DYNAMODB_TABLE}/index/*
 
 functions:
   createPart:
-    handler: src/functions/createPart.handler
+    handler: src/handlers/createPart.handler
     events:
       - http:
           path: /parts
           method: post
           cors: true
 
-  listParts:
-    handler: src/functions/listParts.handler
+  getPartsByType:
+    handler: src/handlers/getPartsByType.handler
     events:
       - http:
           path: /parts
@@ -68,28 +48,37 @@ resources:
       Type: AWS::DynamoDB::Table
       Properties:
         TableName: ${self:provider.environment.DYNAMODB_TABLE}
+        BillingMode: PAY_PER_REQUEST
         AttributeDefinitions:
           - AttributeName: id
             AttributeType: S
           - AttributeName: type
             AttributeType: S
-          - AttributeName: createdAt
-            AttributeType: S
         KeySchema:
           - AttributeName: id
             KeyType: HASH
         GlobalSecondaryIndexes:
-          - IndexName: TypeIndex
+          - IndexName: type-index
             KeySchema:
               - AttributeName: type
                 KeyType: HASH
-              - AttributeName: createdAt
-                KeyType: RANGE
             Projection:
               ProjectionType: ALL
-            ProvisionedThroughput:
-              ReadCapacityUnits: 5
-              WriteCapacityUnits: 5
-        ProvisionedThroughput:
-          ReadCapacityUnits: 5
-          WriteCapacityUnits: 5
+
+plugins:
+  - serverless-dynamodb-local
+  - serverless-offline
+
+custom:
+  serverless-offline:
+    httpPort: 3000
+    host: 0.0.0.0
+  dynamodb:
+    stages:
+      - dev
+      - local
+    start:
+      port: 8000
+      inMemory: true
+      migrate: true
+      noStart: false
