@@ -18,8 +18,8 @@
     "@types/node": "^18.17.0",
     "@types/uuid": "^9.0.2",
     "serverless": "^3.35.0",
-    "serverless-dynamodb-local": "^0.2.40",
-    "serverless-offline": "^12.0.4",
+    "serverless-dynamodb": "^0.2.58",
+    "serverless-offline": "^13.3.3",
     "typescript": "^5.1.6"
   }
 }
